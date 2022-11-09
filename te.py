@@ -1,121 +1,153 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Nov  8 21:58:42 2022
-
-@author: Akira
-"""
-
 #!/usr/bin/python3
 import rospy
+import numpy as np
+import matplotlib.pyplot as plt
 from geometry_msgs.msg import Twist
-from turtlesim.msg import Pose
-from math import pow, atan2, sqrt
 
+rospy.init_node("turtlesim", anonymous=True)
+pub = rospy.Publisher('/turtle1/cmd_vel', Twist, queue_size=10)
 
-class TurtleBot:
+x1=0
+y1=0
+theta1=0*np.pi/180
+x2=4.0
+y2=3
+theta2=55*np.pi/180
+amax=0.5
+Vmax=3
 
-    def __init__(self):
+A  = np.array([ [1, x1, x1**2, x1**3],
+                [1, x2, x2**2, x2**3],
+                [0, 1,   2*x1, 3*x1**2],
+                [0, 1,   2*x2, 3*x2**2]
+                ])
 
-        rospy.init_node('turtlebot_controller', anonymous=True)
+b = np.array([ [y1],
+               [y2],
+               [np.tan(theta1)],
+               [np.tan(theta2)],               
+               ])
 
+a_coef = np.linalg.inv(A) @ b
 
-        self.velocity_publisher = rospy.Publisher('/turtle1/cmd_vel',
-                                                  Twist, queue_size=10)
-        self.pose_subscriber = rospy.Subscriber('/turtle1/pose',
-                                                Pose, self.update_pose)
+a0 = a_coef[0];
+a1 = a_coef[1];
+a2 = a_coef[2];
+a3 = a_coef[3];
 
-        self.pose = Pose()
-        self.rate = rospy.Rate(10)
-        self.path = []
-        
-        self.posepoint1 = Pose()
-        self.posepoint1.x = 1
-        self.posepoint1.y = 1
-        self.posepoint1.theta= 0
-        self.path.append(self.posepoint1)
-        self.posepoint2 = Pose()
+X = np.linspace(x1, x2, 1000, endpoint= True);
+Y = a3 * X**3 +  a2 * X**2 + a1*X + a0
 
-        self.posepoint2.x = 1
-        self.posepoint2.y = 9
-        self.posepoint2.theta= 0.50
-        self.path.append(self.posepoint2) 
-    	self.posepoint3 = Pose()
+#plt.clf()
+#plt.plot(X,Y)
+#plt.show()
 
+S = np.linspace(0,0, X.size) 
+S[0] = 0
+for i in range(1, X.size):
+    dX = X[i] - X[i-1]
+    dY = Y[i] - Y[i-1]
+    dS = np.sqrt( dX**2 + dY**2)
+    S[i] = S[i-1] + dS
+rospy.loginfo(S[-1])
 
-    def update_pose(self, data):
-
-        self.pose = data
-        self.pose.x = round(self.pose.x, 4)
-        self.pose.y = round(self.pose.y, 4)
-
-    def euclidean_distance(self, goal_pose):
-        """Euclidean distance between current pose and the goal."""
-        return sqrt(pow((goal_pose.x - self.pose.x), 2) +
-                    pow((goal_pose.y - self.pose.y), 2))
-
-    def linear_vel(self, goal_pose, constant=1.5):
-
-        return constant * self.euclidean_distance(goal_pose)
-
-    def steering_angle(self, goal_pose):
-
-        return atan2(goal_pose.y - self.pose.y, goal_pose.x - self.pose.x)
-
-    def angular_vel(self, goal_pose, constant=6):
-        return constant * (self.steering_angle(goal_pose) - self.pose.theta)
+def parametrize(amax, Vmax, S):
+    D = S[-1]
+    t1 = Vmax / amax
+    tf = D/Vmax + t1
     
-    def takepath(self):
-	print(self.path)
-        for point in self.path:
-            print(point)
-            self.move2goal(point)
+    S1 = 0.5*amax*t1**2
+    S2 = D - S1
+    S3 = D
+    
+    T = np.linspace(0,0, S.size)
+    for i in range(S.size):
+        s = S[i]
+        if s <= S1:
+            T[i] = np.sqrt( 2 * s / amax)
+            
+        elif s > S1 and s <= S2:
+            T[i] = t1 + (s-S1)/Vmax
+            
+        elif s > S2 and s <= S3:
+            T[i] = tf - np.sqrt(2*(D-s)/amax)
+    
+    return T
+T=parametrize(amax,Vmax,S)
+#plt.clf()
+#plt.plot(T,S)
+#plt.show()
 
-        rospy.spin()
+def trapvel(amax, Vmax, D, T):
+    t1 = Vmax / amax
+    tf = D /Vmax + t1
+    
+    V = np.linspace(0,0, T.size)
+    for i in range(T.size):
+        t = T[i]
+        if t <= t1:
+            V[i] = amax*t
+            
+        elif t > t1 and t <= tf - t1:
+            V[i] = Vmax
+            
+        elif t > (tf-t1) and t <= tf:
+            V[i] = Vmax - amax*(t-tf + t1)
+            
+        else:
+            V[i] = 0
+            
+    return V
+V = trapvel(amax,Vmax,S[-1],T)
 
-    def move2goal(self,point):
-        goal_pose = Pose()
-        goal_pose.x = point.x
-        goal_pose.y = point.y
-        # Please, insert a number slightly greater than 0 (e.g. 0.01).
-        distance_tolerance = 1
+#plt.clf()
+#plt.plot(T,V)
+#plt.show()
 
-        vel_msg = Twist()
+Q = np.linspace(0,0, T.size)
+W = np.linspace(0,0, T.size)
+Q[0] = theta1
+W[0] = 0
+for i in range(1, X.size):
+    dY = Y[i] - Y[i-1]
+    dX = X[i] - X[i-1]
+    Q[i] = np.arctan2(dY, dX)
+    W[i] = (Q[i] - Q[i-1]) / (T[i] - T[i-1]) 
 
-        try:
-            while self.euclidean_distance(goal_pose) >= distance_tolerance:
+#plt.clf()
+#plt.plot(T,Q)
+#plt.show()
 
-            # Porportional controller.
-            # https://en.wikipedia.org/wiki/Proportional_control
+rate = 50
+rate1 = rospy.Rate(50)
+time_step = 1/rate
+T_cmd = np.arange(0, T[-1], time_step)
+from scipy.interpolate import interp1d
+V_of_t = interp1d(T, V, kind='cubic')
+W_of_t = interp1d(T, W, kind='cubic')
 
-            # Linear velocity in the x-axis.
-                vel_msg.linear.x = self.linear_vel(goal_pose)
-                vel_msg.linear.y = 0
-                vel_msg.linear.z = 0
+V_cmd = V_of_t(T_cmd)
+W_cmd = W_of_t(T_cmd)
 
-            # Angular velocity in the z-axis.
-                vel_msg.angular.x = 0
-                vel_msg.angular.y = 0
-                vel_msg.angular.z = self.angular_vel(goal_pose)
+command = Twist()
 
-            # Publishing our vel_msg
-                self.velocity_publisher.publish(vel_msg)
-
-            # Publish at the desired rate.
-                self.rate.sleep()
-                
-        except KeyboardInterrupt:
-                print("stopped")
-        # Stopping our robot after the movement is over.
-        vel_msg.linear.x = 0
-        vel_msg.angular.z = 0
-        self.velocity_publisher.publish(vel_msg)
-
-
-if __name__ == '__main__':
-    try:
-        x = TurtleBot()
-        x.takepath()
-    except rospy.ROSInterruptException:
-        pass
-
- 
+i=0
+while not rospy.is_shutdown(): 
+    if (i<T_cmd.size):
+        command.linear.x = V_cmd[i]
+        command.linear.y = 0
+        command.linear.z = 0
+        command.angular.x = 0
+        command.angular.y = 0
+        command.angular.z = W_cmd[i]
+        i=i+1
+    else:
+        command.linear.x = 0
+        command.linear.y = 0
+        command.linear.z = 0
+        command.angular.x = 0
+        command.angular.y = 0
+        command.angular.z = 0
+    
+    pub.publish(command)
+    rate1.sleep()
