@@ -74,3 +74,5 @@ else:
     upload_img(needupload)
     with open(localdir + "\\listthumb.txt", "a") as myfile:
       myfile.write(needupload + "\n")
+      
+ftp.quit()
