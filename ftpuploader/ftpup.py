@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 from ftplib import FTP 
 import os
 import fileinput
@@ -7,7 +8,7 @@ ftp.set_debuglevel(2)
 ftp.connect('ftp.cankocum.com', 21) 
 ftp.login('marslogin@cankocum.com','Kruxel299t.')
  
-localdir = "C:\\Users\\makaj\\Desktop\\Ros Projects\\RosProjects\\ftpuploader\\images"
+localdir = "/home/tesla/Desktop/images"
 
 ftp.cwd('/images/')
  
@@ -18,11 +19,11 @@ def ftp_upload(localfile, remotefile):
   print("after upload " + localfile + " to " + remotefile)  
 
 def upload_img(file):
-  ftp_upload(localdir + "\\" + file, file)
+  ftp_upload(localdir + "/" + file, file)
 
 lastlist = []
  
-for line in fileinput.input(localdir + "\\list.txt"):
+for line in fileinput.input(localdir + "/list.txt"):
     lastlist.append(line.rstrip("\n"))
  
 currentlist = os.listdir(localdir)
@@ -33,9 +34,9 @@ if len(newfiles) == 0:
   print("No files need to upload")
 else:
   for needupload in newfiles:
-    print("uploading " + localdir + "\\" + needupload)
+    print("uploading " + localdir + "/" + needupload)
     upload_img(needupload)
-    with open(localdir + "\\list.txt", "a") as myfile:
+    with open(localdir + "/list.txt", "a") as myfile:
       myfile.write(needupload + "\n")
  
 ftp.quit()
@@ -55,11 +56,11 @@ def ftp_upload(localfile, remotefile):
  
  
 def upload_img(file):
-  ftp_upload(localdir + "\\" + file, file)
+  ftp_upload(localdir + "/" + file, file)
  
 lastlist = []
  
-for line in fileinput.input(localdir + "\\listthumb.txt"):
+for line in fileinput.input(localdir + "/listthumb.txt"):
     lastlist.append(line.rstrip("\n"))
  
 currentlist = os.listdir(localdir)
@@ -72,7 +73,7 @@ else:
   for needupload in newfiles:
     print("uploading " + localdir + "\\" + needupload)
     upload_img(needupload)
-    with open(localdir + "\\listthumb.txt", "a") as myfile:
+    with open(localdir + "/listthumb.txt", "a") as myfile:
       myfile.write(needupload + "\n")
       
 ftp.quit()
