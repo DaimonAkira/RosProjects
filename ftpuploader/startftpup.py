@@ -21,7 +21,7 @@ def node2():
 
     while not rospy.is_shutdown():
         print("FTP Uploader running.")
-        os.system("exec /home/tesla/catkin_ws/src/ftpuploader/scripts/ftpup.py")
+        os.system("exec ~/catkin_ws/src/ftpuploader/scripts/ftpup.py")
         rate.sleep()
 
 if __name__ == '__main__':
